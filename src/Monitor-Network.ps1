@@ -1,81 +1,96 @@
 <#
 .SYNOPSIS
-    Network Monitoring Dashboard - Main Script
+    Network Monitoring Dashboard - Main monitoring script
 .DESCRIPTION
-    Continuously monitors system and network metrics, logs alerts when thresholds are exceeded
-.PARAMETER ConfigPath
-    Path to the configuration JSON file
+    Continuously monitors system metrics and sends alerts when thresholds are exceeded
 .PARAMETER Continuous
-    Run continuously with monitoring loop
+    Run monitoring continuously (every checkInterval seconds)
 #>
 
 param(
-    [string]$ConfigPath = "./config/config.json",
     [switch]$Continuous
 )
 
 # Import helper functions
-. ".\src\Get-SystemMetrics.ps1"
-. ".\src\Send-Alert.ps1"
+. .\src\Get-SystemMetrics.ps1
+. .\src\Send-Alert.ps1
+. .\src\Send-EmailAlert.ps1
 
-function Start-MonitoringDashboard {
-    param(
-        [string]$ConfigPath,
-        [switch]$Continuous
-    )
+# Load configuration
+$configPath = ".\config\config.json"
+if (-not (Test-Path $configPath)) {
+    Write-Error "Configuration file not found: $configPath"
+    exit 1
+}
 
-    # Load configuration
-    if (-not (Test-Path $ConfigPath)) {
-        Write-Error "Configuration file not found: $ConfigPath"
-        return
-    }
+$config = Get-Content $configPath | ConvertFrom-Json
+$monitoring = $config.monitoring
+$alerts = $config.alerts
 
-    $config = Get-Content $ConfigPath | ConvertFrom-Json
+# Display header
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "   Network Monitoring Dashboard" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
 
-    Write-Host "========================================" -ForegroundColor Green
-    Write-Host "   Network Monitoring Dashboard" -ForegroundColor Green
-    Write-Host "========================================" -ForegroundColor Green
+if ($Continuous) {
+    Write-Host "Running in CONTINUOUS mode (Ctrl+C to stop)" -ForegroundColor Green
+    Write-Host "Check interval: $($monitoring.checkInterval) seconds" -ForegroundColor Green
     Write-Host ""
+}
 
-    $iteration = 0
+# Iteration counter
+$iteration = 1
 
-    do {
-        $iteration++
-        Write-Host "[Iteration $iteration] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Cyan
+# Main monitoring loop
+do {
+    try {
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        Write-Host "[Iteration $iteration] $timestamp"
 
-        # Get metrics
+        # Get system metrics
         $metrics = Get-SystemMetrics
 
         if ($metrics) {
             # Display metrics
-            Write-Host "CPU Usage:    $($metrics.CPUUsagePercent)%" -ForegroundColor White
-            Write-Host "Memory Usage: $($metrics.MemoryUsagePercent)% ($($metrics.MemoryUsedGB)GB / $($metrics.MemoryTotalGB)GB)" -ForegroundColor White
-            Write-Host "Disk Usage:   $($metrics.DiskUsagePercent)%" -ForegroundColor White
-            Write-Host ""
+            Write-Host "CPU Usage:    $($metrics.CPUUsagePercent)%"
+            Write-Host "Memory Usage: $($metrics.MemoryUsagePercent)% ($($metrics.MemoryUsedGB)GB / $($metrics.MemoryTotalGB)GB)"
+            Write-Host "Disk Usage:   $($metrics.DiskUsagePercent)%"
 
             # Check thresholds and send alerts
-            $thresholds = @{
-                cpuThreshold       = $config.monitoring.cpuThreshold
-                memoryThreshold    = $config.monitoring.memoryThreshold
-                diskThreshold      = $config.monitoring.diskThreshold
+            $alertThresholds = @{
+                cpuThreshold = $monitoring.cpuThreshold
+                memoryThreshold = $monitoring.memoryThreshold
+                diskThreshold = $monitoring.diskThreshold
             }
 
-            Check-Thresholds -Metrics $metrics -Thresholds $thresholds | Out-Null
+            Check-Thresholds -Metrics $metrics -Thresholds $alertThresholds -EmailConfig $alerts
+        }
+        else {
+            Write-Host "Failed to retrieve metrics" -ForegroundColor Red
         }
 
+        $iteration++
+
+        # If continuous mode, wait and loop
         if ($Continuous) {
-            $checkInterval = $config.monitoring.checkInterval
-            Write-Host "Next check in $checkInterval seconds..." -ForegroundColor DarkGray
-            Start-Sleep -Seconds $checkInterval
             Write-Host ""
+            Write-Host "Next check in $($monitoring.checkInterval) seconds..." -ForegroundColor Gray
+            Write-Host ""
+            Start-Sleep -Seconds $monitoring.checkInterval
         }
         else {
             break
         }
-    } while ($Continuous)
+    }
+    catch {
+        Write-Error "Error during monitoring iteration: $_"
+        if (-not $Continuous) {
+            break
+        }
+    }
+} while ($Continuous)
 
-    Write-Host "Monitoring stopped." -ForegroundColor Yellow
-}
-
-# Run the monitoring dashboard
-Start-MonitoringDashboard -ConfigPath $ConfigPath -Continuous:$Continuous
+Write-Host ""
+Write-Host "Monitoring stopped." -ForegroundColor Yellow

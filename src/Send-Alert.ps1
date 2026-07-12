@@ -22,7 +22,9 @@ function Send-Alert {
         [ValidateSet("Warning", "Critical")]
         [string]$Severity = "Warning",
         
-        [string]$LogPath = "./logs"
+        [string]$LogPath = "./logs",
+        
+        [hashtable]$EmailConfig = $null
     )
 
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
@@ -41,6 +43,26 @@ function Send-Alert {
     $color = if ($Severity -eq "Critical") { "Red" } else { "Yellow" }
     Write-Host $alertText -ForegroundColor $color
 
+    # Send email if enabled and configured
+    if ($EmailConfig -and $EmailConfig.enableEmailAlerts) {
+        try {
+            # Convert plain text password to secure string
+            $securePassword = ConvertTo-SecureString $EmailConfig.emailPassword -AsPlainText -Force
+
+            Send-EmailAlert -AlertType $AlertType `
+                -AlertMessage $AlertMessage `
+                -EmailFrom $EmailConfig.emailFrom `
+                -EmailTo $EmailConfig.emailTo `
+                -SmtpServer $EmailConfig.smtpServer `
+                -SmtpPort $EmailConfig.smtpPort `
+                -EmailPassword $securePassword `
+                -Severity $Severity
+        }
+        catch {
+            Write-Warning "Failed to send email alert: $_"
+        }
+    }
+
     return $true
 }
 
@@ -49,7 +71,9 @@ function Check-Thresholds {
         [Parameter(Mandatory=$true)]
         [PSCustomObject]$Metrics,
         
-        [hashtable]$Thresholds
+        [hashtable]$Thresholds,
+        
+        [hashtable]$EmailConfig = $null
     )
 
     $alerts = @()
@@ -58,21 +82,24 @@ function Check-Thresholds {
     if ($Metrics.CPUUsagePercent -gt $Thresholds.cpuThreshold) {
         $alerts += Send-Alert -AlertType "CPU" `
             -AlertMessage "CPU usage is at $($Metrics.CPUUsagePercent)% (Threshold: $($Thresholds.cpuThreshold)%)" `
-            -Severity "Critical"
+            -Severity "Critical" `
+            -EmailConfig $EmailConfig
     }
 
     # Check Memory
     if ($Metrics.MemoryUsagePercent -gt $Thresholds.memoryThreshold) {
         $alerts += Send-Alert -AlertType "Memory" `
             -AlertMessage "Memory usage is at $($Metrics.MemoryUsagePercent)% (Threshold: $($Thresholds.memoryThreshold)%)" `
-            -Severity "Critical"
+            -Severity "Critical" `
+            -EmailConfig $EmailConfig
     }
 
     # Check Disk
     if ($Metrics.DiskUsagePercent -gt $Thresholds.diskThreshold) {
         $alerts += Send-Alert -AlertType "Disk" `
             -AlertMessage "Disk usage is at $($Metrics.DiskUsagePercent)% (Threshold: $($Thresholds.diskThreshold)%)" `
-            -Severity "Warning"
+            -Severity "Warning" `
+            -EmailConfig $EmailConfig
     }
 
     return $alerts
