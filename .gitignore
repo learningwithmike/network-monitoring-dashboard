@@ -1,0 +1,13 @@
+# Logs
+logs/
+*.log
+
+# Config with sensitive data
+config/config-local.json
+
+# Windows
+Thumbs.db
+*.tmp
+
+# IDE
+.vscode/
