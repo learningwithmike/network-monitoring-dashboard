@@ -77,5 +77,3 @@ function Check-Thresholds {
 
     return $alerts
 }
-
-Export-ModuleMember -Function Send-Alert, Check-Thresholds
