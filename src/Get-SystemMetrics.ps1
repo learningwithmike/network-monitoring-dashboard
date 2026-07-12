@@ -53,6 +53,3 @@ function Get-SystemMetrics {
         return $null
     }
 }
-
-# Export function for module use
-Export-ModuleMember -Function Get-SystemMetrics
