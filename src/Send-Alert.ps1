@@ -24,7 +24,7 @@ function Send-Alert {
         
         [string]$LogPath = "./logs",
         
-        [hashtable]$EmailConfig = $null
+        [object]$EmailConfig = $null
     )
 
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
@@ -71,9 +71,9 @@ function Check-Thresholds {
         [Parameter(Mandatory=$true)]
         [PSCustomObject]$Metrics,
         
-        [hashtable]$Thresholds,
+        [object]$Thresholds,
         
-        [hashtable]$EmailConfig = $null
+        [object]$EmailConfig = $null
     )
 
     $alerts = @()
