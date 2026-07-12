@@ -25,12 +25,15 @@ function Get-SystemMetrics {
 
         # Get Disk Usage (C: drive)
         $disk = Get-PSDrive -Name C -ErrorAction Stop
-        $diskUsagePercent = [math]::Round(($disk.Used / $disk.Size) * 100, 2)
+        $diskUsagePercent = 0
+        if ($disk.Size -gt 0) {
+            $diskUsagePercent = [math]::Round(($disk.Used / $disk.Size) * 100, 2)
+        }
 
         # Get Network Interface Stats
-        $networkStats = Get-NetAdapterStatistics -ErrorAction Stop | Select-Object -First 1
-        $bytesSent = $networkStats.SentBytes
-        $bytesReceived = $networkStats.ReceivedBytes
+        $networkStats = Get-NetAdapterStatistics -ErrorAction SilentlyContinue | Select-Object -First 1
+        $bytesSent = if ($networkStats) { $networkStats.SentBytes } else { 0 }
+        $bytesReceived = if ($networkStats) { $networkStats.ReceivedBytes } else { 0 }
 
         # Create output object
         $metrics = [PSCustomObject]@{
